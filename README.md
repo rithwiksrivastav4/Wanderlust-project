@@ -57,10 +57,12 @@ WanderLust is a simple MERN travel blog website ✈ This project is aimed to hel
 #
 
 > [!Note]
-> This project will be implemented on North California region (us-west-1).
+> This project will be implemented on Asia Pacific (Mumbai) region (ap-south-1).
 
 - <b>Create 1 Master machine on AWS with 2CPU, 8GB of RAM (t2.large) and 29 GB of storage and install Docker on it.</b>
-#
+###
+- <b>Use terraform to create a master machine on AWS &  shell script which is in my terraform will install docker and jenkins with all the necessary ports open on it. just change ssh-keys in your aws and terraform file.</b>
+###
 - <b>Open the below ports in security group of master machine and also attach same security group to Jenkins worker node (We will create worker node shortly)</b>
 ![image](https://github.com/user-attachments/assets/4e5ecd37-fe2e-4e4b-a6ba-14c7b62715a3)
 
@@ -123,21 +125,21 @@ sudo apt-get install jenkins -y
   - <b>Create EKS Cluster (Master machine)</b>
   ```bash
   eksctl create cluster --name=wanderlust \
-                      --region=us-east-2 \
+                      --region=ap-south-1 \
                       --version=1.30 \
                       --without-nodegroup
   ```
   - <b>Associate IAM OIDC Provider (Master machine)</b>
   ```bash
   eksctl utils associate-iam-oidc-provider \
-    --region us-east-2 \
+    --region ap-south-1 \
     --cluster wanderlust \
     --approve
   ```
   - <b>Create Nodegroup (Master machine)</b>
   ```bash
   eksctl create nodegroup --cluster=wanderlust \
-                       --region=us-east-2 \
+                       --region=ap-south-1 \
                        --name=wanderlust \
                        --node-type=t2.large \
                        --nodes=2 \
@@ -145,10 +147,10 @@ sudo apt-get install jenkins -y
                        --nodes-max=2 \
                        --node-volume-size=29 \
                        --ssh-access \
-                       --ssh-public-key=eks-nodegroup-key 
+                       --ssh-public-key=my_idrsa 
   ```
 > [!Note]
->  Make sure the ssh-public-key "eks-nodegroup-key is available in your aws account"
+>  Make sure the ssh-public-key "my_idrsa" is available in your aws account"
 #
 - <b id="Jenkins-worker">Setting up jenkins worker node</b>
   - Create a new EC2 instance (Jenkins Worker) with 2CPU, 8GB of RAM (t2.large) and 29 GB of storage and install java on it
@@ -208,7 +210,7 @@ sudo usermod -aG docker ubuntu && newgrp docker
 docker run -itd --name SonarQube-Server -p 9000:9000 sonarqube:lts-community
 ```
 #
-- <b id="Trivy">Install Trivy (Jenkins Worker)</b>
+- <b id="Trivy">Install Trivy (Jenkins Worker & if you use only Master machine)</b>
 ```bash
 sudo apt-get install wget apt-transport-https gnupg lsb-release -y
 wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
@@ -411,6 +413,7 @@ chmod 777 /var/run/docker.sock
 - <b>Congratulations, your application is deployed on AWS EKS Cluster</b>
 ![image](https://github.com/user-attachments/assets/bc2d9680-fe00-49f9-81bf-93c5595c20cc)
 ![image](https://github.com/user-attachments/assets/1ea9d486-656e-40f1-804d-2651efb54cf6)
+![image](kubernetes/assets/2.png)
 - <b>Open port 31000 and 31100 on worker node and Access it on browser</b>
 ```bash
 <worker-public-ip>:31000
@@ -420,6 +423,7 @@ chmod 777 /var/run/docker.sock
 ![image](https://github.com/user-attachments/assets/64394f90-8610-44c0-9f63-c3a21eb78f55)
 - <b>Email Notification</b>
 ![image](https://github.com/user-attachments/assets/0ab1ef47-f939-4618-8651-6aa9274721f4)
+![image](kubernetes/assets/1.png)
 
 #
 ## How to monitor EKS cluster, kubernetes components and workloads using prometheus and grafana via HELM (On Master machine)
@@ -517,12 +521,14 @@ kubectl get secret --namespace prometheus stable-grafana -o jsonpath="{.data.adm
 ![image](https://github.com/user-attachments/assets/3d6652d0-7795-4fe9-8919-f33eac88db73)
 ![image](https://github.com/user-attachments/assets/13321ee5-5d7b-4976-b409-25d3b865a42a)
 ![image](https://github.com/user-attachments/assets/75a22e4b-ae81-4cad-9c92-21dd90d126a8)
+![image](kubernetes/assets/3.png)
+![image](kubernetes/assets/4.png)
 
 #
 ## Clean Up
 - <b id="Clean">Delete eks cluster</b>
 ```bash
-eksctl delete cluster --name=wanderlust --region=us-west-1
+eksctl delete cluster --name=wanderlust --region=ap-south-1
 ```
 
 #
