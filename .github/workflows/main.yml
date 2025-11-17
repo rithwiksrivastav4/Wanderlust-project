@@ -59,7 +59,7 @@ jobs:
       #     sed -i "s|REPLACE_BACKEND_IMAGE|${BACK_IMG}|g" kubernetes/backend.yaml || true
       #     kubectl apply -f kubernetes/ -n ${{ env.K8S_NAMESPACE }}
 
-      - name: Verify rollout (frontend)
+      - name: Verify rollout (frontend) 
         run: |
           kubectl -n ${{ env.K8S_NAMESPACE }} rollout status deployment/wanderlust-frontend --timeout=120s || kubectl -n ${{ env.K8S_NAMESPACE }} get pods -o wide
 
