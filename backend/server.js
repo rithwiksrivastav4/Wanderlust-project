@@ -7,6 +7,7 @@ import { PORT } from './config/utils.js';
 import authRouter from './routes/auth.js';
 import postsRouter from './routes/posts.js';
 import { connectToRedis } from './services/redis.js';
+
 const app = express();
 const port = PORT || 5000;
 
@@ -22,8 +23,9 @@ connectDB();
 // Connect to redis
 connectToRedis();
 
-// API route
+// API routes
 app.use('/api/posts', postsRouter);
+app.use('/api/blogs', postsRouter); // ✅ Added compatibility route
 app.use('/api/auth', authRouter);
 
 app.get('/', (req, res) => {
@@ -35,3 +37,4 @@ app.listen(port, () => {
 });
 
 export default app;
+
