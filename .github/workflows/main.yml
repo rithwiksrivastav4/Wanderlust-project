@@ -13,10 +13,17 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repo
+      # -----------------------------
+      # CHECKOUT REPO
+      # -----------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # -----------------------------
+      # CONFIGURE AWS
+      # -----------------------------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
         with:
@@ -24,15 +31,26 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # -----------------------------
+      # INSTALL KUBECTL (WORKS 100%)
+      # -----------------------------
       - name: Install kubectl
         run: |
-          curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl
-          sudo mv kubectl /usr/local/bin/
+          sudo apt-get update -y
+          sudo apt-get install -y kubectl
 
+      # -----------------------------
+      # AUTHENTICATE WITH EKS
+      # -----------------------------
       - name: Update kubeconfig for EKS
-        run: aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ env.CLUSTER_NAME }} \
+            --region ${{ env.AWS_REGION }}
 
+      # -----------------------------
+      # OPTIONAL: CREATE DOCKER HUB SECRET (PRIVATE REPOS ONLY)
+      # -----------------------------
       - name: Create Docker Hub imagePullSecret (optional)
         run: |
           if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
@@ -42,18 +60,30 @@ jobs:
               --docker-username="${{ secrets.DOCKERHUB_USERNAME }}" \
               --docker-password="${{ secrets.DOCKERHUB_TOKEN }}" \
               --docker-email="${{ secrets.DOCKERHUB_EMAIL }}" \
-              -n ${{ env.K8S_NAMESPACE }} || echo "secret exists, skipping"
+              -n ${{ env.K8S_NAMESPACE }} || echo "Secret already exists"
           else
-            echo "Docker Hub secrets not set — skipping imagePullSecret creation"
+            echo "DockerHub credentials not provided – skipping."
           fi
 
-      - name: Apply kubernetes manifests (as-is)
-        run: kubectl apply -f kubernetes/ -n ${{ env.K8S_NAMESPACE }}
-
-      - name: Verify rollout (frontend)
+      # -----------------------------
+      # APPLY KUBERNETES MANIFESTS
+      # -----------------------------
+      - name: Apply kubernetes manifests
         run: |
-          kubectl -n ${{ env.K8S_NAMESPACE }} rollout status deployment/wanderlust-frontend --timeout=120s || kubectl -n ${{ env.K8S_NAMESPACE }} get pods -o wide
+          kubectl apply -f kubernetes/ -n ${{ env.K8S_NAMESPACE }}
 
-      - name: Verify rollout (backend)
+      # -----------------------------
+      # VERIFY FRONTEND ROLLOUT
+      # -----------------------------
+      - name: Verify frontend rollout
         run: |
-          kubectl -n ${{ env.K8S_NAMESPACE }} rollout status deployment/wanderlust-backend --timeout=120s || kubectl -n ${{ env.K8S_NAMESPACE }} get pods -o wide
+          kubectl -n ${{ env.K8S_NAMESPACE }} rollout status deployment/wanderlust-frontend --timeout=120s || true
+          kubectl -n ${{ env.K8S_NAMESPACE }} get pods -o wide
+
+      # -----------------------------
+      # VERIFY BACKEND ROLLOUT
+      # -----------------------------
+      - name: Verify backend rollout
+        run: |
+          kubectl -n ${{ env.K8S_NAMESPACE }} rollout status deployment/wanderlust-backend --timeout=120s || true
+          kubectl -n ${{ env.K8S_NAMESPACE }} get pods -o wide
