@@ -26,40 +26,29 @@ jobs:
 
       - name: Install kubectl
         run: |
-          sudo snap install kubectl --classic
+          curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
 
       - name: Update kubeconfig for EKS
         run: aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
 
-      # -------------------
-      # Optional: create dockerhub pull secret (if images are in private Docker Hub)
-      # This step always runs, but the shell checks whether DOCKERHUB secrets are set.
       - name: Create Docker Hub imagePullSecret (optional)
         run: |
           if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
-            echo "Creating dockerhub-creds secret in namespace ${{ env.K8S_NAMESPACE }}..."
+            echo "Creating dockerhub-creds secret..."
             kubectl create secret docker-registry dockerhub-creds \
               --docker-server=https://index.docker.io/v1/ \
               --docker-username="${{ secrets.DOCKERHUB_USERNAME }}" \
               --docker-password="${{ secrets.DOCKERHUB_TOKEN }}" \
               --docker-email="${{ secrets.DOCKERHUB_EMAIL }}" \
-              -n ${{ env.K8S_NAMESPACE }} || echo "secret exists or failed"
+              -n ${{ env.K8S_NAMESPACE }} || echo "secret exists, skipping"
           else
-            echo "DOCKERHUB_USERNAME/DOCKERHUB_TOKEN not set — skipping secret creation"
+            echo "Docker Hub secrets not set — skipping imagePullSecret creation"
           fi
 
-      # Option A: Apply manifests as-is (works if kubernetes/*.yaml already reference your Docker Hub images)
       - name: Apply kubernetes manifests (as-is)
         run: kubectl apply -f kubernetes/ -n ${{ env.K8S_NAMESPACE }}
-
-      # Option B (alternative): If your kubernetes YAML uses REPLACE_* placeholders, uncomment & use this
-      # - name: Replace placeholders with your Docker Hub images and apply
-      #   run: |
-      #     FRONT_IMG="yourdockeruser/wanderlust-frontend:latest"
-      #     BACK_IMG="yourdockeruser/wanderlust-backend:latest"
-      #     sed -i "s|REPLACE_FRONTEND_IMAGE|${FRONT_IMG}|g" kubernetes/frontend.yaml || true
-      #     sed -i "s|REPLACE_BACKEND_IMAGE|${BACK_IMG}|g" kubernetes/backend.yaml || true
-      #     kubectl apply -f kubernetes/ -n ${{ env.K8S_NAMESPACE }}
 
       - name: Verify rollout (frontend)
         run: |
