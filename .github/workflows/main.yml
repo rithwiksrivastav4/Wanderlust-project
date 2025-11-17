@@ -40,9 +40,56 @@ jobs:
           sudo apt-get install -y kubectl
 
       # ---------------------------------------------------
-      # STEP 4 — UPDATE KUBECONFIG (**ONE-LINE SAFE**)
+      # STEP 4 — UPDATE KUBECONFIG (fixed)
       # ---------------------------------------------------
       - name: Update kubeconfig for EKS
         run: |
-          CM
+          CMD="aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}"
+          echo "Executing: $CMD"
+          eval $CMD
 
+      # ---------------------------------------------------
+      # STEP 5 — CREATE NAMESPACE (IF NOT EXISTS)
+      # ---------------------------------------------------
+      - name: Create namespace if not exists
+        run: |
+          kubectl get namespace ${{ env.K8S_NAMESPACE }} || kubectl create namespace ${{ env.K8S_NAMESPACE }}
+
+      # ---------------------------------------------------
+      # STEP 6 — CREATE DOCKER HUB SECRET (OPTIONAL)
+      # ---------------------------------------------------
+      - name: Create Docker Hub imagePullSecret (optional)
+        run: |
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "Creating dockerhub-creds..."
+            kubectl create secret docker-registry dockerhub-creds \
+              --docker-server=https://index.docker.io/v1/ \
+              --docker-username="${{ secrets.DOCKERHUB_USERNAME }}" \
+              --docker-password="${{ secrets.DOCKERHUB_TOKEN }}" \
+              --docker-email="${{ secrets.DOCKERHUB_EMAIL }}" \
+              -n ${{ env.K8S_NAMESPACE }} || echo "Secret exists"
+          else
+            echo "No Docker Hub credentials provided — skipping."
+          fi
+
+      # ---------------------------------------------------
+      # STEP 7 — APPLY ALL MANIFESTS
+      # ---------------------------------------------------
+      - name: Apply Kubernetes manifests
+        run: kubectl apply -f kubernetes/ -n ${{ env.K8S_NAMESPACE }}
+
+      # ---------------------------------------------------
+      # STEP 8 — VERIFY FRONTEND ROLLOUT
+      # ---------------------------------------------------
+      - name: Verify frontend rollout
+        run: |
+          kubectl -n ${{ env.K8S_NAMESPACE }} rollout status deployment/wanderlust-frontend --timeout=120s || true
+          kubectl -n ${{ env.K8S_NAMESPACE }} get pods -o wide
+
+      # ---------------------------------------------------
+      # STEP 9 — VERIFY BACKEND ROLLOUT
+      # ---------------------------------------------------
+      - name: Verify backend rollout
+        run: |
+          kubectl -n ${{ env.K8S_NAMESPACE }} rollout status deployment/wanderlust-backend --timeout=120s || true
+          kubectl -n ${{ env.K8S_NAMESPACE }} get pods -o wide
