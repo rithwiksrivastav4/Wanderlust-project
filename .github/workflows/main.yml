@@ -1,0 +1,68 @@
+name: Deploy to EKS (Docker Hub images)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
+  K8S_NAMESPACE: "default"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install kubectl
+        run: |
+          sudo snap install kubectl --classic
+
+      - name: Update kubeconfig for EKS
+        run: aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      # -------------------
+      # Optional: create dockerhub pull secret (if images are in private Docker Hub)
+      # The secret will be created only if DOCKERHUB_USERNAME and DOCKERHUB_TOKEN are set.
+      - name: Create Docker Hub imagePullSecret (optional)
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        run: |
+          kubectl create secret docker-registry dockerhub-creds \
+            --docker-server=https://index.docker.io/v1/ \
+            --docker-username="${{ secrets.DOCKERHUB_USERNAME }}" \
+            --docker-password="${{ secrets.DOCKERHUB_TOKEN }}" \
+            --docker-email="${{ secrets.DOCKERHUB_EMAIL }}" \
+            -n ${{ env.K8S_NAMESPACE }} || echo "secret exists or failed"
+
+      # -------------------
+      # Option A: Apply manifests as-is (use this if kubernetes/*.yaml already reference your Docker Hub images)
+      - name: Apply kubernetes manifests (as-is)
+        run: kubectl apply -f kubernetes/ -n ${{ env.K8S_NAMESPACE }}
+
+      # -------------------
+      # Option B: If your kubernetes YAML uses placeholders, replace them first (uncomment this step and comment out the 'Apply as-is' step)
+      # - name: Replace placeholders with your Docker Hub images and apply
+      #   run: |
+      #     FRONT_IMG="yourdockeruser/wanderlust-frontend:latest"
+      #     BACK_IMG="yourdockeruser/wanderlust-backend:latest"
+      #     sed -i "s|REPLACE_FRONTEND_IMAGE|${FRONT_IMG}|g" kubernetes/frontend.yaml || true
+      #     sed -i "s|REPLACE_BACKEND_IMAGE|${BACK_IMG}|g" kubernetes/backend.yaml || true
+      #     kubectl apply -f kubernetes/ -n ${{ env.K8S_NAMESPACE }}
+
+      - name: Verify rollout (frontend)
+        run: |
+          kubectl -n ${{ env.K8S_NAMESPACE }} rollout status deployment/wanderlust-frontend --timeout=120s || kubectl -n ${{ env.K8S_NAMESPACE }} get pods -o wide
+
+      - name: Verify rollout (backend)
+        run: |
+          kubectl -n ${{ env.K8S_NAMESPACE }} rollout status deployment/wanderlust-backend --timeout=120s || kubectl -n ${{ env.K8S_NAMESPACE }} get pods -o wide
