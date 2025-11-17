@@ -32,7 +32,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       # -----------------------------
-      # INSTALL KUBECTL (WORKS 100%)
+      # INSTALL KUBECTL (no snap issues)
       # -----------------------------
       - name: Install kubectl
         run: |
@@ -40,16 +40,13 @@ jobs:
           sudo apt-get install -y kubectl
 
       # -----------------------------
-      # AUTHENTICATE WITH EKS
+      # UPDATE KUBECONFIG (ONE LINE — FIXED)
       # -----------------------------
       - name: Update kubeconfig for EKS
-        run: |
-          aws eks update-kubeconfig \
-            --name ${{ env.CLUSTER_NAME }} \
-            --region ${{ env.AWS_REGION }}
+        run: aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
 
       # -----------------------------
-      # OPTIONAL: CREATE DOCKER HUB SECRET (PRIVATE REPOS ONLY)
+      # OPTIONAL: DOCKER HUB SECRET (FOR PRIVATE REPOS)
       # -----------------------------
       - name: Create Docker Hub imagePullSecret (optional)
         run: |
@@ -66,11 +63,10 @@ jobs:
           fi
 
       # -----------------------------
-      # APPLY KUBERNETES MANIFESTS
+      # APPLY ALL MANIFESTS
       # -----------------------------
-      - name: Apply kubernetes manifests
-        run: |
-          kubectl apply -f kubernetes/ -n ${{ env.K8S_NAMESPACE }}
+      - name: Apply Kubernetes manifests
+        run: kubectl apply -f kubernetes/ -n ${{ env.K8S_NAMESPACE }}
 
       # -----------------------------
       # VERIFY FRONTEND ROLLOUT
@@ -87,3 +83,4 @@ jobs:
         run: |
           kubectl -n ${{ env.K8S_NAMESPACE }} rollout status deployment/wanderlust-backend --timeout=120s || true
           kubectl -n ${{ env.K8S_NAMESPACE }} get pods -o wide
+
